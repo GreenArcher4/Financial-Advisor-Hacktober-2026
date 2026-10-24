@@ -4,15 +4,13 @@
 
 *Built at Hacktoberfest, Kiambu, powered by Gemma 4.*
 
-*Built by Hazina Squad. Members: Lorna, CJ, Samuel, Aki*
+*(Team and product name is a placeholder. Alternatives: Kibubu Labs, Weka Squad, Akiba Minds, Hacktober Hazina.)*
 
 ---
 
 ## The Problem
 
-Most students receive money in lumps (HELB, pocket money, a gig) and it is gone before the month ends. Kenya's savings and investing rate is among the lowest in East Africa, at about 14% compared with 22% in Uganda and 36% in Tanzania.
-
-Students aren't bad at saving. They lack simple, trustworthy guidance:
+Most students receive money in lumps (HELB, pocket money, a gig), and it is gone before the month ends. Students aren't bad at saving. They lack simple, trustworthy guidance:
 
 - Money market funds (MMFs) are a great first step, but there are dozens and the terms are confusing.
 - Nobody tells a student which fund fits their situation.
@@ -20,7 +18,7 @@ Students aren't bad at saving. They lack simple, trustworthy guidance:
 
 ## The Solution
 
-Kiota helps a student go from saving nothing to saving KES 500 a week, with a tool built for their reality.
+Jenga helps a student go from saving nothing to saving KES 500 a week, with a tool built for their reality.
 
 1. **Set a goal.** Tell us what you want to save (for example, "KES 20,000 for a laptop by June") and how much you can contribute each month.
 2. **Get matched to an MMF.** We compare funds by minimum deposit, access to your money, and risk, and explain the match in plain language.
@@ -41,14 +39,14 @@ Gemma 4 is open-weight under the Apache 2.0 license, and its small versions (E2B
 
 | Feature | Status |
 |---|---|
-| Goal and monthly contribution input | 🔲 |
-| MMF matching engine (minimum deposit, access, risk) | 🔲 |
-| M-Pesa (Daraja) saving reminders | 🔲 |
-| CMA updates in simple language | 🔲 |
+| Goal and monthly contribution input | ✅  |
+| MMF matching engine (minimum deposit, access, risk) | ✅  |
+| M-Pesa (Daraja) saving reminders | 🚧  |
+| CMA updates in simple language | 🚧 |
 | Finance Q&A assistant (Gemma 4) | 🔲 |
 | Swahili support | 🔲 |
 
-*(Update these as you build: ✅ done, 🚧 in progress, 🔲 planned.)*
+*(What each emoji means : ✅ done, 🚧 in progress, 🔲 planned.)*
 
 ## How It Works
 
@@ -68,15 +66,6 @@ Student inputs goal + monthly amount
    Progress tracking + CMA updates + Q&A
 ```
 
-## Responsible AI and Compliance
-
-- Kiota provides **education and fund comparison**. It does not hold user money or give personalised "buy this" investment advice.
-- The assistant never invents yields. Fund figures come from a verified dataset and are always shown with an "as of [date]" label.
-- When the assistant is unsure, it says so and points users to the fund manager or the CMA.
-- Returns are never guaranteed, and disclaimers are shown in the app.
-- Kenya's CMA is moving to license robo-advisory platforms, and its Regulatory Sandbox has been used by firms testing automated advice. Our path to launch is partnering with a licensed fund manager and/or applying to the sandbox.
-- We follow the principles of Kenya's Data Protection Act, and on-device AI helps keep user data private.
-
 > **Disclaimer:** Kiota is an educational tool and not a licensed financial advisor. Always confirm fund details with the fund manager before investing.
 
 ## Landscape
@@ -94,34 +83,12 @@ Student inputs goal + monthly amount
 
 **Where Kiota fits:** most of these are places where you invest. Kiota is a fund-neutral guide built for students that helps them choose and keeps them saving.
 
-## Our Edge
-
-- Offline, on-device AI that works without data bundles
-- Swahili and Sheng-friendly assistance
-- Fund-neutral comparison across managers
-- Student-first design: flexible amounts, a "skip this month" option, and emergency fund first
-- Plain-language CMA updates that help students spot scams
-- Built around M-Pesa from day one
-
-## Roadmap
-
-- [ ] Working demo with 3 to 5 real MMFs
-- [ ] M-Pesa (Daraja) sandbox integration
-- [ ] On-device Gemma 4 (E2B/E4B) assistant
-- [ ] Swahili fine-tuning
-- [ ] Streaks and goal progress tracking
-- [ ] Group saving with friends
-- [ ] Campus pilot (student clubs and chapters)
-- [ ] Partnership with a licensed fund manager
-
 ## Tech Stack
 
-*(Fill in what you actually use.)*
-
 - **AI:** Gemma 4 (E2B/E4B on-device)
-- **Payments:** Safaricom Daraja (M-Pesa)
-- **Frontend:** _TBD_
-- **Backend / data:** _TBD_
+- **Payments:** Safaricom Daraja (M-Pesa sandboxing for now)
+- **Frontend:** html, css
+- **Backend / data:** python 
 
 ## Getting Started
 
@@ -136,15 +103,21 @@ cd <repo-name>
 
 ## Team
 
-| Name | Role |
+| Name | 
 |---|---|
-| _Your name_ | _Role_ |
-| _Teammate_ | _Role_ |
+| Lorna | 
+| CJ | 
+| Aki| 
 
 ## License
 
-Add a license, for example MIT or Apache 2.0.
+coming soon
 
 ---
 
-*Built with ❤️ in Kiambu during Hacktoberfest 2026.*
+
+The Student Problem: "Most university students have KES 500 – KES 2,000 to save, but traditional banks offer less than 3% annual interest. They don't know which MMFs accept low minimums or how 15% withholding tax works."  
+The Prompt:
+Enter a query in your app: "I have KES 1,000 to invest today and can add KES 500 every month. Which MMFs can I join, and how much will I have in 1 year?"The Agent Action: Show Gemma 4 invoking compare_mmfs(1000) and calculate_net_returns(1000, 500, 12, 10.5) behind the scenes, then rendering a comparison table and net return projection directly on screen.
+
+*Built during ❤️ Hacktoberfest Kiambu 2026.*
