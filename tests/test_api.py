@@ -23,7 +23,7 @@ def test_health():
 def test_index_page_is_served():
     res = client.get("/")
     assert res.status_code == 200
-    assert "Ask Gemma" in res.text
+    assert "Student money guide" in res.text
 
 
 def test_blank_question_is_rejected():
@@ -53,6 +53,62 @@ def test_text_only_question(monkeypatch):
     assert res.status_code == 200
     assert res.json() == {"answer": "an answer", "model": "m1", "attempts": 1}
     assert seen["args"] == ("hello there", None)
+
+
+def test_finance_plan_returns_comparison_and_projection():
+    res = client.post(
+        "/api/finance/plan",
+        json={
+            "principal": 1000,
+            "monthly_topup": 500,
+            "duration_years": 1,
+            "gross_rate": 10.5,
+        },
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert [fund["name"] for fund in data["funds"]] == [
+        "Etica MMF",
+        "Cytonn MMF",
+        "Ziidi MMF",
+    ]
+    assert data["projection"]["total_contributions_kes"] == 7000
+    assert data["projection"]["projected_net_kes"] > 7000
+    assert "not live or verified" in data["data_notice"]
+
+
+def test_finance_advice_uses_tool_results_and_finance_prompt(monkeypatch):
+    seen = {}
+
+    def fake(prompt, **kwargs):
+        seen["prompt"] = prompt
+        seen["system_prompt"] = kwargs["system_prompt"]
+        return Answer(text="An educational estimate.", model="m1", attempts=1)
+
+    monkeypatch.setattr(main, "ask_gemma", fake)
+    res = client.post(
+        "/api/finance/advice",
+        json={
+            "principal": 1000,
+            "monthly_topup": 500,
+            "duration_years": 1,
+            "gross_rate": 10.5,
+            "question": "Which funds fit?",
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["answer"] == "An educational estimate."
+    assert "compare_mmfs" in seen["prompt"]
+    assert "calculate_net_returns" in seen["prompt"]
+    assert "15% withholding tax" in seen["system_prompt"]
+
+
+def test_finance_plan_rejects_invalid_values():
+    res = client.post(
+        "/api/finance/plan",
+        json={"principal": -1, "monthly_topup": 0, "duration_years": 1},
+    )
+    assert res.status_code == 422
 
 
 def test_image_is_written_with_the_right_extension(monkeypatch):

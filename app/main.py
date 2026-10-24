@@ -6,8 +6,10 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from app.gemma import ConfigError, GemmaUnavailable, ask_gemma
+from app.finance import calculate_net_returns, compare_mmfs
 
 log = logging.getLogger(__name__)
 
@@ -22,9 +24,22 @@ ALLOWED_IMAGE_TYPES = {
 }
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_QUESTION_CHARS = 2000
+DEMO_DATA_NOTICE = (
+    "Illustrative demo data only; rates and withdrawal times are not live or "
+    "verified. Confirm current terms, fees, and provider authorization before investing."
+)
+FINANCE_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "finance.txt"
 
-app = FastAPI(title="gemma-starter")
+app = FastAPI(title="Jenga student finance guide")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+class FinanceRequest(BaseModel):
+    principal: float = Field(ge=0)
+    monthly_topup: float = Field(ge=0)
+    duration_years: int = Field(ge=1, le=50)
+    gross_rate: float = Field(default=10.5, ge=0, le=100)
+    question: str = Field(default="", max_length=MAX_QUESTION_CHARS)
 
 
 @app.get("/")
@@ -35,6 +50,61 @@ def index() -> FileResponse:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+def _build_finance_plan(request: FinanceRequest) -> dict:
+    funds = compare_mmfs(int(request.principal))
+    projection = calculate_net_returns(
+        request.principal,
+        request.monthly_topup,
+        request.duration_years * 12,
+        request.gross_rate,
+    )
+    return {
+        "funds": funds,
+        "projection": projection,
+        "gross_rate": request.gross_rate,
+        "duration_months": request.duration_years * 12,
+        "data_notice": DEMO_DATA_NOTICE,
+    }
+
+
+@app.post("/api/finance/plan")
+def finance_plan(request: FinanceRequest) -> dict:
+    return _build_finance_plan(request)
+
+
+@app.post("/api/finance/advice")
+def finance_advice(request: FinanceRequest) -> dict:
+    plan = _build_finance_plan(request)
+    question = request.question.strip() or (
+        f"I have KES {request.principal:,.0f} to invest today and can add "
+        f"KES {request.monthly_topup:,.0f} every month. Which MMFs can I join, "
+        f"and how much could I have in {request.duration_years} year(s)?"
+    )
+    prompt = (
+        f"Student question: {question}\n\n"
+        "Tool results from compare_mmfs and calculate_net_returns "
+        "(treat these as the source of truth; do not alter the figures):\n"
+        f"{plan}\n\n"
+        "Explain the eligible demo funds and projection in plain language. "
+        "Mention the 15% withholding tax, state that these are illustrative "
+        "estimates rather than guarantees, and remind the student to verify "
+        "current fund terms. Do not claim a fund is licensed."
+    )
+    try:
+        answer = ask_gemma(
+            prompt, system_prompt=FINANCE_PROMPT_PATH.read_text(encoding="utf-8").strip()
+        )
+    except GemmaUnavailable:
+        raise HTTPException(503, "Gemma is busy right now. Please try again in a minute.")
+    except ConfigError:
+        log.exception("server misconfigured")
+        raise HTTPException(500, "The server isn't configured correctly.")
+    except Exception:
+        log.exception("Gemma finance advice request failed")
+        raise HTTPException(502, "The model rejected this request.")
+    return {"answer": answer.text, "model": answer.model, "attempts": answer.attempts}
 
 
 # A plain `def` (not async) on purpose: FastAPI runs it in a worker thread, and
@@ -55,6 +125,9 @@ def ask(
     # filename rather than just `is not None`.
     has_image = image is not None and bool(image.filename)
 
+    #error handling logic: GemmaUnavailable is a transient error
+    # , ConfigError is a server misconfiguration, 
+    # and any other exception is treated as a non-transient API error.
     try:
         if not has_image:
             answer = ask_gemma(question)
