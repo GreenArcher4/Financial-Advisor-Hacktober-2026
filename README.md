@@ -4,7 +4,7 @@
 
 *Built at Hacktoberfest, Kiambu, powered by Gemma 4.*
 
-*(Team and product name is a placeholder. Alternatives: Kibubu Labs, Weka Squad, Akiba Minds, Hacktober Hazina.)*
+*Built by Hazina Squad. Members: Lorna, CJ, Samuel, Aki*
 
 ---
 
