@@ -104,7 +104,7 @@ cd <repo-name>
 ## Team
 
 | Name | 
-|---|---|
+|Samuel|
 | Lorna | 
 | CJ | 
 | Aki| 
