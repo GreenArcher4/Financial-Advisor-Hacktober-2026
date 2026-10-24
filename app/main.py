@@ -10,6 +10,12 @@ from pydantic import BaseModel, Field
 
 from app.gemma import ConfigError, GemmaUnavailable, ask_gemma
 from app.finance import calculate_net_returns, compare_mmfs
+from app.mpesa import (
+    MpesaConfigurationError,
+    MpesaRequestError,
+    initiate_stk_push,
+    normalize_phone_number,
+)
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +48,11 @@ class FinanceRequest(BaseModel):
     question: str = Field(default="", max_length=MAX_QUESTION_CHARS)
 
 
+class MpesaStkRequest(BaseModel):
+    phone_number: str = Field(min_length=9, max_length=20)
+    amount_kes: int = Field(ge=1)
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -72,6 +83,33 @@ def _build_finance_plan(request: FinanceRequest) -> dict:
 @app.post("/api/finance/plan")
 def finance_plan(request: FinanceRequest) -> dict:
     return _build_finance_plan(request)
+
+
+@app.post("/api/mpesa/stk-push")
+def mpesa_stk_push(request: MpesaStkRequest) -> dict:
+    try:
+        phone_number = normalize_phone_number(request.phone_number)
+        return initiate_stk_push(phone_number, request.amount_kes)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except MpesaConfigurationError as exc:
+        log.warning("M-Pesa sandbox is not configured: %s", exc)
+        raise HTTPException(503, "M-Pesa sandbox is not configured yet.")
+    except MpesaRequestError:
+        log.exception("M-Pesa sandbox STK push failed")
+        raise HTTPException(502, "Could not send the M-Pesa sandbox prompt.")
+
+
+@app.post("/api/mpesa/callback")
+def mpesa_callback(payload: dict) -> dict:
+    try:
+        result_code = payload["Body"]["stkCallback"]["ResultCode"]
+    except (KeyError, TypeError):
+        raise HTTPException(400, "Invalid M-Pesa callback payload.")
+    if not isinstance(result_code, int):
+        raise HTTPException(400, "Invalid M-Pesa callback result.")
+    log.info("M-Pesa sandbox callback received with result code %d", result_code)
+    return {"ResultCode": 0, "ResultDesc": "Callback received."}
 
 
 @app.post("/api/finance/advice")

@@ -134,6 +134,29 @@
     .tool-dot { flex: 0 0 auto; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--green); }
     code { color: var(--green-dark); font: 10px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
     .disclaimer { margin: 17px 2px 0; color: var(--muted); font-size: 11px; }
+    .mpesa-dialog {
+      width: min(430px, calc(100% - 32px));
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 24px 80px rgb(20 36 28 / 24%);
+    }
+    .mpesa-dialog::backdrop { background: rgb(14 26 20 / 48%); }
+    .mpesa-content { padding: 24px; }
+    .mpesa-content h2 { margin: 0; font-size: 19px; letter-spacing: -.03em; }
+    .mpesa-content p { margin: 7px 0 18px; color: var(--muted); font-size: 13px; }
+    .mpesa-actions { display: grid; gap: 9px; margin-top: 18px; }
+    .secondary {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .mpesa-actions .primary { margin: 0; }
     @media (max-width: 850px) {
       .shell { padding-right: 20px; padding-left: 20px; }
       .layout { grid-template-columns: minmax(260px, .82fr) minmax(0, 1.18fr); gap: 14px; }
@@ -254,9 +277,32 @@
     <p class="disclaimer">Figures are estimates for learning, not a promise of returns. Rates, minimums, taxes, fees, and withdrawal times can vary. Verify current terms and provider authorization independently before investing.</p>
   </div>
 
+  <dialog id="mpesa-dialog" class="mpesa-dialog" aria-labelledby="mpesa-heading">
+    <form id="mpesa-form" class="mpesa-content">
+      <h2 id="mpesa-heading">Continue with M-Pesa?</h2>
+      <p>Optionally request a one-time Daraja sandbox STK Push before the advisor runs. You choose the amount and must approve it on your phone. This will not block your advisor if skipped or unavailable.</p>
+      <div class="field">
+        <label for="mpesa-phone">M-Pesa phone number</label>
+        <input id="mpesa-phone" name="phone_number" type="tel" inputmode="tel" autocomplete="tel" placeholder="0712 345 678" pattern="(?:\+?254|0)[17][0-9]{8}" required>
+      </div>
+      <div class="field">
+        <label for="mpesa-amount">One-time amount</label>
+        <div class="input-wrap"><span class="currency">KES</span><input class="money" id="mpesa-amount" name="amount_kes" type="number" min="1" step="1" placeholder="Amount" required></div>
+      </div>
+      <div class="mpesa-actions">
+        <button class="primary" type="submit">Send sandbox prompt &amp; continue</button>
+        <button id="skip-mpesa" class="secondary" type="button">Continue without M-Pesa</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     const form = document.getElementById("form");
     const submit = document.getElementById("submit");
+    const mpesaDialog = document.getElementById("mpesa-dialog");
+    const mpesaForm = document.getElementById("mpesa-form");
+    const mpesaSubmit = mpesaForm.querySelector("button[type='submit']");
+    let pendingPayload = null;
     const statusEl = document.getElementById("status");
     const answerEl = document.getElementById("answer");
     const fundRows = document.getElementById("fund-rows");
@@ -334,19 +380,11 @@
       renderTools(data);
     }
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!form.reportValidity()) return;
-      const payload = {
-        principal: Number(form.elements.principal.value),
-        monthly_topup: Number(form.elements.monthly_topup.value),
-        duration_years: Number(form.elements.duration_years.value),
-        gross_rate: Number(form.elements.gross_rate.value),
-        question: form.elements.question.value
-      };
+    async function runAdvisor(payload, payment) {
       let planRendered = false;
       submit.disabled = true;
       statusEl.className = "";
+      let paymentStatus = "";
       statusEl.textContent = "Comparing example funds and estimating your returns…";
       answerEl.textContent = "Gemma 4 is reviewing your plan and the calculation.";
 
@@ -360,6 +398,23 @@
         if (!planResponse.ok) throw new Error(plan.detail || `Plan failed (${planResponse.status})`);
         renderPlan(plan);
         planRendered = true;
+
+        if (payment) {
+          statusEl.textContent = "Your plan is ready. Sending the optional M-Pesa prompt…";
+          try {
+            const paymentResponse = await fetch("/api/mpesa/stk-push", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payment)
+            });
+            const paymentData = await paymentResponse.json().catch(() => ({}));
+            if (!paymentResponse.ok) throw new Error(paymentData.detail || `M-Pesa request failed (${paymentResponse.status})`);
+            paymentStatus = "Sandbox STK prompt sent; payment is not verified.";
+          } catch (error) {
+            paymentStatus = `M-Pesa prompt not sent (${error.message}); continuing without payment.`;
+          }
+        }
+
         statusEl.textContent = "Your plan is ready. Asking Gemma 4 to explain it…";
 
         const adviceResponse = await fetch("/api/finance/advice", {
@@ -370,10 +425,13 @@
         const advice = await adviceResponse.json().catch(() => ({}));
         if (!adviceResponse.ok) throw new Error(advice.detail || `Advisor request failed (${adviceResponse.status})`);
         answerEl.textContent = advice.answer;
-        statusEl.textContent = `Answered by ${advice.model}${advice.attempts > 1 ? ` · attempt ${advice.attempts}` : ""}`;
+        statusEl.textContent = [
+          `Answered by ${advice.model}${advice.attempts > 1 ? ` · attempt ${advice.attempts}` : ""}`,
+          paymentStatus
+        ].filter(Boolean).join(" · ");
       } catch (error) {
         statusEl.className = "error";
-        statusEl.textContent = error.message;
+        statusEl.textContent = [error.message, paymentStatus].filter(Boolean).join(" · ");
         if (!planRendered) {
           answerEl.textContent = "The plan could not be calculated. Check your entries and try again.";
         } else {
@@ -382,6 +440,45 @@
       } finally {
         submit.disabled = false;
       }
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      pendingPayload = {
+        principal: Number(form.elements.principal.value),
+        monthly_topup: Number(form.elements.monthly_topup.value),
+        duration_years: Number(form.elements.duration_years.value),
+        gross_rate: Number(form.elements.gross_rate.value),
+        question: form.elements.question.value
+      };
+      submit.disabled = true;
+      mpesaDialog.showModal();
+    });
+
+    document.getElementById("skip-mpesa").addEventListener("click", () => {
+      const payload = pendingPayload;
+      pendingPayload = null;
+      mpesaDialog.close();
+      if (payload) runAdvisor(payload, null);
+    });
+
+    mpesaDialog.addEventListener("cancel", () => {
+      pendingPayload = null;
+      submit.disabled = false;
+    });
+
+    mpesaForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!mpesaForm.reportValidity() || !pendingPayload) return;
+      const payload = pendingPayload;
+      const payment = {
+        phone_number: mpesaForm.elements.phone_number.value,
+        amount_kes: Number(mpesaForm.elements.amount_kes.value)
+      };
+      pendingPayload = null;
+      mpesaDialog.close();
+      runAdvisor(payload, payment);
     });
   </script>
 </body>

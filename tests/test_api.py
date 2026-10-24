@@ -111,6 +111,58 @@ def test_finance_plan_rejects_invalid_values():
     assert res.status_code == 422
 
 
+def test_mpesa_stk_push_validates_and_normalizes_phone(monkeypatch):
+    seen = {}
+
+    def fake_push(phone_number, amount_kes):
+        seen["request"] = (phone_number, amount_kes)
+        return {"checkout_request_id": "checkout-1", "customer_message": "Prompt sent"}
+
+    monkeypatch.setattr(main, "initiate_stk_push", fake_push)
+    res = client.post(
+        "/api/mpesa/stk-push",
+        json={"phone_number": "+254 712-345-678", "amount_kes": 10},
+    )
+    assert res.status_code == 200
+    assert seen["request"] == ("254712345678", 10)
+
+
+def test_mpesa_stk_push_rejects_invalid_phone():
+    res = client.post(
+        "/api/mpesa/stk-push",
+        json={"phone_number": "1234567890", "amount_kes": 10},
+    )
+    assert res.status_code == 400
+    assert "valid Kenyan mobile" in res.json()["detail"]
+
+
+def test_mpesa_stk_push_reports_missing_sandbox_config(monkeypatch):
+    def unconfigured(*_):
+        raise main.MpesaConfigurationError("MPESA_CONSUMER_KEY is not configured.")
+
+    monkeypatch.setattr(main, "initiate_stk_push", unconfigured)
+    res = client.post(
+        "/api/mpesa/stk-push",
+        json={"phone_number": "0712345678", "amount_kes": 10},
+    )
+    assert res.status_code == 503
+    assert "not configured" in res.json()["detail"]
+
+
+def test_mpesa_callback_acknowledges_valid_result():
+    res = client.post(
+        "/api/mpesa/callback",
+        json={"Body": {"stkCallback": {"ResultCode": 1032}}},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"ResultCode": 0, "ResultDesc": "Callback received."}
+
+
+def test_mpesa_callback_rejects_invalid_payload():
+    res = client.post("/api/mpesa/callback", json={})
+    assert res.status_code == 400
+
+
 def test_image_is_written_with_the_right_extension(monkeypatch):
     seen = {}
 
